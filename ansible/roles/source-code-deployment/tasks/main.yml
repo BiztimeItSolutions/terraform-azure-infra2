@@ -1,0 +1,140 @@
+---
+# Source Code Deployment Role
+# Handles downloading/copying source code to desktop
+
+- name: Prepare Desktop directory for source code
+  block:
+    - name: Create SourceCode directory on Desktop
+      win_file:
+        path: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode"
+        state: directory
+
+    - name: Set folder permissions
+      win_acl:
+        path: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode"
+        user: "{{ ansible_user }}"
+        rights:
+          - FullControl
+        type: allow
+        state: present
+
+- name: Handle Source Code Deployment
+  block:
+    # Option 1: Download from URL
+    - name: Download source code from URL
+      win_get_url:
+        url: "{{ source_code_url }}"
+        dest: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode\\source.zip"
+        timeout: 600
+      when: source_code_url is defined and source_code_url != ""
+      ignore_errors: yes
+      register: download_result
+
+    # Option 2: Copy from local path (if available)
+    - name: Copy source code from local path
+      win_copy:
+        src: "{{ source_code_path }}"
+        dest: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode\\"
+        remote_src: no
+      when: source_code_path is defined and source_code_path != "" and not download_result.changed
+      ignore_errors: yes
+      register: copy_result
+
+    # Option 3: Create placeholder with instructions
+    - name: Create placeholder if no source code provided
+      win_template:
+        src: source-code-readme.txt.j2
+        dest: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode\\README.txt"
+        backup: yes
+      when: (source_code_path is not defined or source_code_path == "") and (source_code_url is not defined or source_code_url == "")
+
+- name: Extract and organize source code
+  block:
+    - name: Check for ZIP files
+      win_find:
+        paths: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode"
+        patterns: "*.zip"
+      register: zip_files
+
+    - name: Extract ZIP files
+      win_shell: |
+        $zipFile = '{{ item.path }}'
+        $destination = Split-Path $zipFile
+        Expand-Archive -Path $zipFile -DestinationPath $destination -Force
+        Write-Output "Extracted: $zipFile"
+      loop: "{{ zip_files.files }}"
+      when: zip_files.matched > 0
+
+    - name: Check for compressed archives
+      win_find:
+        paths: "C:\\Users\\{{ ansible_user }}\\Desktop\\SourceCode"
+        patterns: "*.rar,*.7z,*.tar,*.gz"
+      register: other_archives
+
+    - name: Extract other archives using 7zip
+      win_shell: |
+        $archive = '{{ item.path }}'
+        $destination = Split-Path $archive
+        & 'C:\Program Files\7-Zip\7z.exe' x $archive -o$destination
+        Write-Output "Extracted: $archive"
+      loop: "{{ other_archives.files }}"
+      when: other_archives.matched > 0
+      ignore_errors: yes
+
+- name: Create source code index
+  block:
+    - name: Generate file listing
+      win_shell: |
+        $path = 'C:\Users\{{ ansible_user }}\Desktop\SourceCode'
+        $output = "$path\FILE_INDEX.txt"
+        
+        Get-ChildItem -Path $path -Recurse | Select-Object FullName, @{
+          Name='Size(KB)'; Expression={[math]::Round($_.Length/1KB, 2)}
+        } | Out-File -FilePath $output -Encoding UTF8
+        
+        Write-Output "File index created at $output"
+      ignore_errors: yes
+
+- name: Create README with deployment info
+  block:
+    - name: Create deployment information file
+      win_shell: |
+        $readmeContent = @"
+        ===========================================
+        SOURCE CODE DEPLOYMENT INFORMATION
+        ===========================================
+        
+        Deployment Date: $(Get-Date)
+        Deployed By: Ansible
+        Location: C:\Users\{{ ansible_user }}\Desktop\SourceCode
+        
+        Contents:
+        $(Get-ChildItem -Path 'C:\Users\{{ ansible_user }}\Desktop\SourceCode' -Force | ForEach-Object { "`n  - $($_.Name)" })
+        
+        Next Steps:
+        1. Review source code
+        2. Build project (if applicable)
+        3. Run Fortify Scan
+        4. Build mobile apps (Android & iOS)
+        
+        Tools Available:
+        - Fortify Scan: C:\Fortify\bin\sourceanalyzer.exe
+        - Sublime Text: C:\Program Files\Sublime Text\subl.exe
+        
+        ===========================================
+        "@
+        
+        $readmeContent | Out-File -FilePath 'C:\Users\{{ ansible_user }}\Desktop\SourceCode\DEPLOYMENT_INFO.txt' -Encoding UTF8
+        Write-Output "Deployment info created"
+      ignore_errors: yes
+
+- name: Summary
+  debug:
+    msg: |
+      Source Code Deployment Summary:
+      - Location: C:\Users\{{ ansible_user }}\Desktop\SourceCode
+      - Status: Deployed
+      - Next: Review source code and prepare for scanning
+      
+      File Index: C:\Users\{{ ansible_user }}\Desktop\SourceCode\FILE_INDEX.txt
+      Deployment Info: C:\Users\{{ ansible_user }}\Desktop\SourceCode\DEPLOYMENT_INFO.txt

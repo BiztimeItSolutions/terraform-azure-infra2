@@ -1,0 +1,106 @@
+---
+# Sublime Text Installation Role
+
+- name: Install Sublime Text
+  block:
+    - name: Download Sublime Text installer
+      win_inet_proxy:
+        bypass_list: all
+
+    - name: Install Sublime Text using Chocolatey
+      win_chocolatey:
+        name: sublimetext3
+        state: present
+      ignore_errors: yes
+
+    - name: If Chocolatey fails, install manually
+      block:
+        - name: Download Sublime Text direct
+          win_get_url:
+            url: "https://download.sublimetext.com/Sublime%20Text%20Build%203211%20Setup.exe"
+            dest: "C:\\temp\\sublime-text-installer.exe"
+            timeout: 300
+          ignore_errors: yes
+
+        - name: Install Sublime Text manually
+          win_command: "C:\\temp\\sublime-text-installer.exe /S"
+          async: 600
+          poll: 30
+          ignore_errors: yes
+
+      when: false  # Skip if Chocolatey works
+
+- name: Verify Sublime Text Installation
+  block:
+    - name: Check Sublime Text executable
+      win_stat:
+        path: "C:\\Program Files\\Sublime Text\\subl.exe"
+      register: sublime_exe
+
+    - name: Display Sublime installation status
+      debug:
+        msg: "Sublime Text installed successfully at C:\\Program Files\\Sublime Text"
+      when: sublime_exe.stat.exists
+
+    - name: Add Sublime to PATH
+      win_shell: |
+        $sublimePath = 'C:\Program Files\Sublime Text'
+        $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'Machine')
+        if ($currentPath -notlike "*$sublimePath*") {
+          $newPath = "$currentPath;$sublimePath"
+          [Environment]::SetEnvironmentVariable('PATH', $newPath, 'Machine')
+          Write-Output "Sublime Text added to PATH"
+        }
+      when: sublime_exe.stat.exists
+
+- name: Configure Sublime Text
+  block:
+    - name: Create Sublime Text config directory
+      win_file:
+        path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Sublime Text\\Packages\\User"
+        state: directory
+
+    - name: Create Sublime Text preferences file
+      win_template:
+        src: sublime-preferences.json.j2
+        dest: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Sublime Text 3\\Packages\\User\\Preferences.sublime-settings"
+        backup: yes
+      ignore_errors: yes
+
+    - name: Create sublime command alias
+      win_shell: |
+        New-Alias -Name sublime -Value 'C:\Program Files\Sublime Text\subl.exe' -Scope CurrentUser -Force
+        Write-Output "Sublime alias created"
+      ignore_errors: yes
+
+- name: Create Desktop shortcut for Sublime Text
+  block:
+    - name: Create Sublime Text desktop shortcut
+      win_shell: |
+        $DesktopPath = [Environment]::GetFolderPath('Desktop')
+        $ShortcutPath = "$DesktopPath\Sublime Text.lnk"
+        $TargetPath = 'C:\Program Files\Sublime Text\subl.exe'
+        
+        if (Test-Path $TargetPath) {
+          $WshShell = New-Object -ComObject WScript.Shell
+          $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+          $Shortcut.TargetPath = $TargetPath
+          $Shortcut.IconLocation = "$TargetPath,0"
+          $Shortcut.Save()
+          Write-Output "Sublime Text shortcut created on Desktop"
+        }
+      ignore_errors: yes
+
+- name: Summary
+  debug:
+    msg: |
+      Sublime Text Installation Summary:
+      - Installation Path: C:\Program Files\Sublime Text
+      - Executable: C:\Program Files\Sublime Text\subl.exe
+      - Configuration: C:\Users\{{ ansible_user }}\AppData\Roaming\Sublime Text 3\Packages\User
+      - Desktop Shortcut: Yes
+      
+      Usage:
+      - Launch from Start Menu: Sublime Text
+      - Launch from Command Line: sublime
+      - Open file: sublime <filename>

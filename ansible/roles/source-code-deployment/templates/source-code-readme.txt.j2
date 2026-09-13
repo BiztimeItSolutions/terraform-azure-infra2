@@ -1,0 +1,54 @@
+SOURCE CODE DEPLOYMENT INSTRUCTIONS
+====================================
+
+This directory (C:\Users\{{ ansible_user }}\Desktop\SourceCode) has been prepared for source code deployment.
+
+CURRENT STATUS:
+- Location: C:\Users\{{ ansible_user }}\Desktop\SourceCode
+- Created: {{ ansible_date_time.iso8601 }}
+
+HOW TO ADD SOURCE CODE:
+========================
+
+Option 1: Manual Upload via RDP
+- Copy your source code files directly to this directory via RDP
+
+Option 2: Download from URL
+- Place your source code URL and run:
+  Invoke-WebRequest -Uri "your-source-code-url" -OutFile "C:\Users\{{ ansible_user }}\Desktop\SourceCode\source.zip"
+  Expand-Archive -Path "source.zip" -DestinationPath "."
+
+Option 3: Git Clone
+- Open PowerShell and run:
+  cd C:\Users\{{ ansible_user }}\Desktop\SourceCode
+  git clone <your-repo-url>
+
+AVAILABLE TOOLS:
+================
+1. Fortify Scan: C:\Fortify\bin\sourceanalyzer.exe
+2. Sublime Text: C:\Program Files\Sublime Text\subl.exe
+3. 7-Zip: C:\Program Files\7-Zip\7z.exe
+4. Git: Use 'git' command
+
+NEXT STEPS:
+===========
+1. Add your source code to this directory
+2. Review the code in Sublime Text
+3. Run Fortify Scan on the source code
+4. Build Android and iOS apps with SSL pinning configurations
+5. Test all configurations
+
+FORTIFY SCAN EXAMPLE:
+====================
+Open PowerShell and run:
+  C:\Fortify\bin\sourceanalyzer.exe -b MyProject C:\Users\{{ ansible_user }}\Desktop\SourceCode
+  C:\Fortify\bin\sourceanalyzer.exe -b MyProject -scan
+
+MOBILE APP BUILD REQUIREMENTS:
+==============================
+Build 1 (Android): SSL Pinning + Jailbreak Detection
+Build 2 (Android): No SSL Pinning, No Jailbreak Detection
+Build 3 (iOS): SSL Pinning + Root Detection
+Build 4 (iOS): No SSL Pinning, No Root Detection
+
+For more information, refer to the deployment logs and RDP credentials provided.
