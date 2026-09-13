@@ -1,0 +1,121 @@
+---
+# Fortify Scan Installation Role
+# NOTE: Installation file should be uploaded or provided separately
+
+- name: Check for Fortify installation file
+  win_stat:
+    path: "C:\\temp\\fortify-installer.zip"
+  register: fortify_installer
+
+- name: Fortify Scan Installation Block
+  block:
+    - name: Create temp directory for Fortify
+      win_file:
+        path: "C:\\temp\\fortify"
+        state: directory
+
+    - name: Extract Fortify installer
+      win_shell: |
+        $source = 'C:\temp\fortify-installer.zip'
+        $destination = 'C:\temp\fortify'
+        Expand-Archive -Path $source -DestinationPath $destination -Force
+        Write-Output "Fortify installer extracted successfully"
+      when: fortify_installer.stat.exists
+
+    - name: Run Fortify installer
+      win_shell: |
+        $installerPath = 'C:\temp\fortify\FortifyInstaller.exe'
+        if (Test-Path $installerPath) {
+          & $installerPath /S /D=C:\Fortify
+          Write-Output "Fortify installation started"
+        } else {
+          Write-Output "Installer not found at $installerPath"
+        }
+      register: fortify_installation
+      async: 3600
+      poll: 30
+      when: fortify_installer.stat.exists
+
+    - name: Wait for Fortify installation to complete
+      win_shell: |
+        Start-Sleep -Seconds 120
+        if (Test-Path 'C:\Fortify\bin\sourceanalyzer.exe') {
+          Write-Output "Fortify installation completed successfully"
+          exit 0
+        } else {
+          Write-Output "Fortify installation may have failed"
+          exit 1
+        }
+      register: fortify_check
+      retries: 3
+      delay: 60
+
+  rescue:
+    - name: Handle Fortify installation error
+      debug:
+        msg: "Fortify installation encountered an issue. Please manually upload the installer to C:\\temp\\fortify-installer.zip"
+
+- name: Verify Fortify Installation
+  block:
+    - name: Check Fortify executable
+      win_stat:
+        path: "C:\\Fortify\\bin\\sourceanalyzer.exe"
+      register: fortify_exe
+
+    - name: Get Fortify version
+      win_shell: |
+        if (Test-Path 'C:\Fortify\bin\sourceanalyzer.exe') {
+          & 'C:\Fortify\bin\sourceanalyzer.exe' -version
+        }
+      register: fortify_version
+      when: fortify_exe.stat.exists
+      ignore_errors: yes
+
+    - name: Display Fortify version
+      debug:
+        msg: "{{ fortify_version.stdout }}"
+      when: fortify_exe.stat.exists
+
+- name: Configure Fortify environment
+  block:
+    - name: Add Fortify to PATH
+      win_shell: |
+        $fortifyPath = 'C:\Fortify\bin'
+        $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'Machine')
+        if ($currentPath -notlike "*$fortifyPath*") {
+          $newPath = "$currentPath;$fortifyPath"
+          [Environment]::SetEnvironmentVariable('PATH', $newPath, 'Machine')
+          Write-Output "Fortify added to PATH"
+        }
+      register: path_update
+
+    - name: Set Fortify environment variables
+      win_environment:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        level: machine
+      loop:
+        - name: "FORTIFY_HOME"
+          value: "C:\\Fortify"
+        - name: "FORTIFY_LICENSE"
+          value: "C:\\Fortify\\license.dat"
+
+- name: Create Fortify scan script template
+  win_template:
+    src: fortify-scan.ps1.j2
+    dest: "C:\\Fortify\\scan-source-code.ps1"
+    backup: yes
+  ignore_errors: yes
+
+- name: Summary
+  debug:
+    msg: |
+      Fortify Scan Installation Summary:
+      - Installation Path: C:\Fortify
+      - Executable: C:\Fortify\bin\sourceanalyzer.exe
+      - Scan Script: C:\Fortify\scan-source-code.ps1
+      
+      Next Steps:
+      1. Verify license file is in place
+      2. Run scan: C:\Fortify\scan-source-code.ps1

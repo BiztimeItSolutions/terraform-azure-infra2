@@ -1,0 +1,81 @@
+---
+# Main Playbook for hawapay VM Configuration
+# Purpose: Install and configure Fortify Scan, Sublime Text, and deploy source code
+# Hosts: Windows VMs in azure
+
+- name: Configure Windows VM with Security and Development Tools
+  hosts: windows_vms
+  gather_facts: yes
+  vars:
+    ansible_user: "{{ ansible_user }}"
+    ansible_password: "{{ ansible_password }}"
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    
+  tasks:
+    - name: Display system information
+      win_shell: |
+        $computerInfo = Get-ComputerInfo
+        Write-Output "Computer Name: $($computerInfo.CsComputerName)"
+        Write-Output "OS: $($computerInfo.OsName)"
+        Write-Output "RAM: $($computerInfo.CsPhysicalMemory / 1GB) GB"
+      register: system_info
+      
+    - name: Show system info
+      debug:
+        msg: "{{ system_info.stdout_lines }}"
+
+  roles:
+    - role: common-setup
+      tags:
+        - common
+    
+    - role: fortify-scan
+      tags:
+        - fortify
+    
+    - role: sublime-text
+      tags:
+        - sublime
+    
+    - role: source-code-deployment
+      tags:
+        - sourcecode
+    
+    - role: rdp-optimization
+      tags:
+        - rdp
+
+  post_tasks:
+    - name: Create summary report
+      win_shell: |
+        $report = @"
+        ===============================================
+        VM Configuration Completion Report
+        ===============================================
+        Hostname: $env:COMPUTERNAME
+        Domain: $env:USERDOMAIN
+        Logged In User: $env:USERNAME
+        Installed Tools:
+        - Fortify Scan
+        - Sublime Text
+        - Source Code (Desktop)
+        
+        Recommended Next Steps:
+        1. Connect via RDP to verify installations
+        2. Run Fortify Scan on the source code
+        3. Build and test mobile apps
+        ===============================================
+        "@
+        Write-Output $report
+      register: completion_report
+      
+    - name: Display completion report
+      debug:
+        msg: "{{ completion_report.stdout }}"
+
+  handlers:
+    - name: Restart Computer
+      win_reboot:
+        msg: "Restarting computer after configuration"
+        pre_reboot_delay: 5

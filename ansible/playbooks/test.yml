@@ -1,0 +1,16 @@
+---
+# Main Playbook for hawapay VM Configuration
+# Purpose: Install and configure Fortify Scan, Sublime Text, and deploy source code
+# Hosts: Windows VMs in azure
+
+- name: Configure Windows VM with Security and Development Tools
+  hosts: linux_vm
+  gather_facts: yes
+  vars:
+    ansible_user: "{{ ansible_user }}"
+    ansible_password: "{{ ansible_password }}"
+    
+  tasks:
+    - name: Show system info
+      debug:
+        msg: "{{ hostname }}"
